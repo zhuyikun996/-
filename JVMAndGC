@@ -1,0 +1,213 @@
+## 前置信息
+- JVM是什么
+    - 一种能够运行Java字节码的虚拟机。
+    - 作为一种编程语言的虚拟机，实际上不只是专用于Java,只要生成的编译文件匹配JVM对加载编译文件格式要求，任何语言都可以由JVM编译运行
+- JVM内存结构
+    1. JVM体系结构如下图：![8bd9e27208468881d5087e022d93b349.png](evernotecid://B2A04554-5B1C-4C43-8149-115BAAFE5C5A/appyinxiangcom/11701113/ENResource/p2823)
+    2. Java8之后的JVM，Metaspace VM Metadata in native memory
+- GC作用域
+    1. 方法区 Method Area
+    2. 堆 heap
+- 常见的垃圾回收算法
+    1. 引用计数
+        1. 应用：微软COM、ActionScrip3、Python
+        2. 缺点：每次对象赋值时均要维护引用计数器，且计数器本身也有一定的消耗。较难处理循环引用。JVM一般不采用这种方式。
+    2. 复制
+        1. eden，SurvivorFrom复制到SurvivorTo，年龄+1。首先，当Eden区满的时候，会出发一次GC，把还活着的对象拷贝到SurvivorFrom区，当Eden区再次触发GC的时候会扫描Eden区和From区，对这两个区进行GC，经过这次GC后还活着的对象，则直接复制到To区（如果对象年龄已经达到了Old标准，则赋值到老年代区），同时把这些对象的年龄+1.
+        2. 清空eden，SurvivorFrom。清空Eden和SurvivorFrom中的对象，也即复制之后有交换，谁空谁是to
+        3. to和from交换。最后，to和from交换，原to成为下一次GC时的from区。部分对象会在from和to区域中复制来复制去。如此交换15次（由JVM参数MaxTenuringThreshold决定，这个参数是15），最终如果还是存活，就存入老年代。
+    3. 标记清除。算法分成两部分，先标记出要回收的对象，然后统一回收这些对象。会产生内存碎片。
+    4. 标记整理。标记清除部分跟标记清除算法一样，增加一步，重新扫描一边，把存活的对象整理到一端。这里移动对象需要付出一定成本
+
+
+## 知识点
+### JVM垃圾回收的时候如何确定垃圾，什么是GC Roots
+1. 垃圾：简单来说，内存中不再被使用到的空间就是垃圾
+2. 如何判断一个对象是否可以被回收
+    1. 引用计数法：Java中，引用和对象是有关联的。如果要操作对象则必须用引用进行操作。因此，很显然的一个办法是通过引用计数来判断一个对象是否可以回收。简单来说，给对象添加一个引用计数器，当有一个地方引用它，计数器的值+1，当有一个引用失效的时候，计数器的值-1。任何时刻计数器为0的对象就不可能再被使用，那么这个对象就是可回收对象。但是主流的Java虚拟机里没有选择用这种方法。因为这种方法难以解决对象之间循环引用的问题。
+    2. 枚举根节点，做可达性分析。为了解决循环引用的问题，Java使用了可达性分析的办法。通过一系列名为"GC Roots"的对象作为起始点，从这个被称为GC Roots的对象开始向下搜索，如果一个对象到GC Roots没有任何引用链相连时，则说明该对象不可用。可达的对象判定为存活，不可达对象判定为死亡。
+3. 哪些可以作为GC Roots对象
+    1. 虚拟机栈（栈帧中的局部变量区，也叫做局部变量表）中引用的对象
+    2. 方法区中的类静态属性引用对象
+    3. 方法区中常量引用的对象
+    4. 本地方法栈中JNI(Native方法)引用的对象
+
+### 如何查看JVM系统默认值
+1. JVM参数类型
+    1. 标准参数
+    2. X参数
+        1. -Xint 解释执行
+        2. -Xcomp 第一次使用就编译成本地代码
+        3. -Xmixed
+    3. XX参数
+        1. Boolean类型。
+            1. 格式：-XX:+（或者-）某个属性。其中+表示开启，-表示关闭
+            2. 举个例子：-XX:-PrintGCDetails 没有启用打印GC信息，-XX:+UseSerialGC 启用串行GC
+        2. KV设置类型
+            1. 格式：-XX:属性key=属性值value
+            2. 举例：
+        3. jinfo举例，如何查看当前运行程序的配置
+            1. 先用jps -l查看当前运行的进程有哪些，拿到需要查询的进程id
+            2. jinfo -flag 需要查询的JVM参数名 进程id
+        4. 题外话
+            1. -Xms 等价于 -XX:InitialHeapSize默认值为物理内存的六十四分之一
+            2. -Xmx 等价于 -XX:MaxHeapSize 默认值为物理内存的四分之一
+2. JVM默认值
+    1. -XX:+PrintFlagsInitial 查看初始默认值。公式：java -XX:+PrintFlagsInitial -version
+    2. -XX:+PrintFlagsFinal 查看修改过的值。公式：java -XX:+PrintFlagsFinal -version
+    3. -XX:+PrintCommandLineFlags 打印命令行参数 java -XX:+PrintCommandLineFlags -version
+3. JVM常用的配置参数
+    1. -Xms 等价于-XX:InitialHeapSize 初始大小内存，默认为物理内存的1/64
+    2. -Xmx 等价于-XX:MaxHeapSize 最大分配内存，默认为物理内存的1/4
+    3. -Xss 等价于-XX:ThreadStackSize 设置单个线程栈的大小，一般默认为512K-1024K (栈管运行，堆管存储)
+    4. -Xmn 设置新生区年轻代的大小，新生代默认是堆空间的1/3，老年代默认是堆空间的2/3
+    5. -XX:MetaspaceSize 设置元空间大小，元空间的本质和永久代类似，都是对JVM规范中方法区的实现。不过元空间跟永久代之间最大的区别在于：元空间并不在虚拟机中，而是使用本地内存。因此默认情况下元空间的大小仅受本地内存限制。
+    6. -XX:PrintGCDetails 输出详细GC收集日志。[名称：GC前内存占用 -> GC后内存占用(该区内存总大小)]
+    7. -XX:SurvivorRatio 设置新生代中eden和s0、s1三者空间的比例，默认情况下-XX:SurvivorRatio=8,Eden:s0:s1=8:1:1，如果设置成-XX:SurvivorRation=4，则Eden:s0:s1=4:1:1
+    8. -XX:NewRation 设置年轻代和老年代在堆结构中的占比，默认情况下-XX:NewRatio=2,新生代：老年代=1：2，年轻代占整个堆的1/3。如果设置-XX:NewRatio=4,新生代：老年代=1：4，年轻代占整个堆的1/5 
+    9. -XX:MaxTenuringThreshold 设置垃圾最大年龄
+       
+  ### 强软弱虚引用
+ 1. 整体架构
+     1. 强(1 level) - 软弱虚（2 level）
+ 2. 强引用 Reference
+     1. 默认的引用类型为强引用。对于强引用的对象，就算是OOM也不会对该对象进行回收。因此强引用是造成Java内存泄露的主要原因。
+     2. 将强引用设置为null，则可以进行垃圾回收。
+ 3. 软引用 SoftReference
+     1. 软引用是相对强引用弱化了一些的引用，需要用java.lang.ref.SoftReference类来实现。
+     2. 当系统内存充足的时候 不会 被回收。当系统内存不足的时候 会 被回收。
+     3. 适用于内存高度敏感的场景，比如高速缓存，内存够用就保留，内存不够就GC。
+ 4. 弱引用 WeakReference
+     1. java.lang.ref.WeakReference
+     2. 只要gc，弱引用就一定被回收
+     3. WeakHashMap
+ 5. 虚引用
+     1. java.lang.ref.PhantomReference
+     2. 虚引用随时都可能被GC回收
+     3. 作用：跟踪对象被垃圾回收的状态。仅仅是提供了一种确保对象被finalize以后，做某些事情的机制。必须跟ReferenceQueue联合使用
+     4. 虚引用的get方法总是返回null
+ 6. 引用队列 ReferenceQueue
+     1. 我被回收前，需要放到引用队列保存下。
+     2. ReferenceQueue是用来配合工作的，没有ReferenceQueue一样可以运行。创建引用的时候可以指定关联的队列，当GC释放对象内存时，就会将引用加入到引用队列。如果程序发现某个虚引用被加入到队列，那么就可以在所引用的对象被回收之前采取必要的行动。这相当于一种通知机制。
+     3. 当关联的引用队列中有数据的时候，意味着引用指向的堆内存中的对象被回收。通过这种方式，JVM允许我们在对象被销毁后，做一些我们自己想做的事情
+ 7. 使用场景
+     1. 如果有一个应用需要读取大量本地图片。每次从硬盘读取则会严重影响性能，如果一次性加载到内存则可能造成内存溢出。此时可以使用软引用解决这个问题。 设计思路：用hashmap来保存图片的路径和相应图片对象关联的软引用之间的映射关系，在内存不足的时候JVM会自动回收这些缓存图片对象所占用的空间，从而有效地避免了OOM。
+```java
+Map<String, SoftReference<Bitmap>> imageCache = new HashMap<String, SoftReference<Bitmap>>();
+```
+
+### OOM
+1. java.lang.StackOverflowError
+    1. 递归过深，把栈撑爆
+    2. 属于错误
+2. java.lang.OutOfMemoryError:java heap space
+    1. 大对象把内存撑爆
+    2. 属于错误
+3. java.lang.OutOfMemoryError:GC overhead limit exceeded
+    1. 超过98%的时间用来做GC，并且回收了不到2%的堆内存，连续多次都回收不到2%的堆内存则爆出GC overhead limit exceeded错误。
+    2. 可能是因为程序中存在死循环，一直在占用内存，导致GC没有效果，内存持续被全部占用
+4. java.lang.OutOfMemoryError:Direct buffer memory
+    1. GC回收的内存大部分是（99%）堆内存，但是元数据存储在物理内存中，堆内存存放相应指针，这种情况下，堆内存占用小，不会触发GC，但是本地内存可能已经被占满，此时会报Direct buffer memory。这种异常出现在NIO程序中，ByteBuffer.allocateDirect(capability)分配本地内存时可能会出现
+    2. Java使用的本地内存一般为机器屋里内存的1/4,查看方式：sun.misc.VM.maxDirectMemory()/(double)1024/1024 单位是MB
+    3. 配置本地内存大参数：-XX:MaxDirectMemorySize=5m，配置本地内存为5m
+5. java.lang.OutOfMemoryError:unable to create new native thread
+    1. 高并发请求服务器时，经常出现如下异常：java.lang.OutOfMemoryError:unable to create new native thread,该异常与对应平台有关
+    2. 导致原因
+        1. 应用创建了太多的线程，一个应用进程创建太多线程，超过系统承载极限
+        2. 服务器并不允许应用创建这么多线程，linux系统默认允许单个进程可以创建的线程数是1024个，如果创建的线程数大于这个数，就会报异常
+    3. 解决办法
+        1. 想办法降低应用创建线程的数量，分析应用是否真的需要创建这么多线程，如果不是，改代码，降低线程数
+        2. 如果应用确实需要创建更多的线程数，则修改Linux系统默认的线程数限制，修改配置的命令：vim /etc/security/limits.d/90-nproc.conf
+6. java.lang.OutOfMemoryError:Metaspace
+    1. 使用java -XX:+PrintFlagsInitial命令查看本机的初始化参数,一般为20M左右的本地存储空间
+    2. Java8之后使用metaspace代替了永久代。metaspace是方法区在HotSpot中的实现，不在虚拟机内存中，而是在本地内存。
+    3. Metaspace(永久代)存放如下信息
+        1. 虚拟机加载的类信息
+        2. 常量池
+        3. 静态变量（1.8以后静态变量和class对象在堆内存中，永久代中存放类的二进制字节流）
+        4. 即时编译后的代码
+### 垃圾回收器
+1. 垃圾回收算法：引用计数，复制，标记清除，标记整理是内存回收的方法论，垃圾收集器就是算法落地的实现
+2. 四种垃圾回收器
+    1. 串行回收，Serial。为单线程环境设计并且只使用一个线程进行垃圾回收，会暂停所有的用户线程，不适合服务器环境。
+    2. 并行回收，Parallel。多个垃圾收集线程并行工作，此时用户线程是暂停的，适用于科学计算、大数据处理等弱交互场景。
+    3. 并发标记清除，CMS。用户线程和垃圾回收线程同时执行（不一定并行，可能交替执行），不需要停顿用户线程，互联网公司多用它，适用对响应时间有要求的场景。
+    4. G1。G1垃圾回收器将堆内存分割成不同的区域，然后并发的对其进行垃圾回收。
+3. 如何查看服务器默认的垃圾回收器是哪一个，生产上如何配置垃圾回收器
+    1. java -XX:+PrintCommandLineFlags -version
+    2. 默认垃圾回收器：UseSerialGC,ConcMarkSweep，ParNew,Parallel,ParallelOld,G1
+        1. 新生代：Serial Copying, Parallel Scavenge, ParNew, G1
+        2. 老年代：Serial MSC(SerialOld), Parallel Compacting(Parallel Old), CMS, G1
+    3. CMS必须在老年代堆内存用完之前完成GC，否则CMS回收失败，将触发担保机制，Serial old串行老年代收集器将会以STW方式进行一次GC，从而造成较大停顿。
+
+![cbd775203253123eceb4fb14bd9b1984.png](evernotecid://B2A04554-5B1C-4C43-8149-115BAAFE5C5A/appyinxiangcom/11701113/ENResource/p2845)
+
+4. G1垃圾回收器
+    1. G1收集器之前的收集器特点
+        1. 年轻代和老年代是各自独立且连续的内存块
+        2. 年轻代收集使用单eden+S0+S1进行复制算法
+        3. 老年的收集必须扫描整个老年代区域
+        4. 设计原则：尽可能少而快速地执行GC
+    2. G1是什么
+        1. Garbage First 是一款面向服务端应用的收集器。应用在多处理器和大容量内存环境中。在实现高吞吐量的同时，尽可能的满足垃圾收集暂停时间的要求。
+    3. G1特点
+        1. G1能充分利用多CPU、多核环境硬件优势，尽量缩短STW（Stop The World）
+        2. G1整体上采用标记-整理算法，局部是复制算法，**不会产生内存碎片**
+        3. 宏观上G1不再分年轻代和老年代，而是把内存分成多个独立的子区域（regin）
+        4. G1收集器将整个内存区混合在一起，但其本身依然在小范围内要进行年轻代和老年代的区分，保留了年轻代和老年代，它们不再是物理隔离，但是会采用不同的GC方式来处理不同的区域
+        5. G1虽然也是分代收集器，但是整个内存分区不存在物理上的年轻代和老年代的区别，也不需要完全独立的survivor（to space）堆做复制准备。G1只有逻辑上的分代概念，或者说每个分区都可能随G1的运行在不同代之间前后切换
+        
+    4. 跟CMS相比，G1具有以下优势
+        1. G1是一个有整理内存过程的垃圾回收器，不会产生更多的内存碎片
+        2. G1的SWT（Stop The World）更可控，G1在停顿时间上添加了预测机制，用户可指定期望停顿时间。
+5. GC类型
+    1. YoungGC/MinorGC
+    2. CMS OldGC
+    3. MajorGC/FullGC
+    4. G1 MixedGC
+
+## 重点问题
+
+1. 为什么要打破双亲委派？（类加载机制）
+    1. 类加载的过程
+        1. 加载：将.class文件从磁盘读到内存
+        2. 连接：
+            1. 验证：验证字节码文件的正确性
+            2. 准备：给类的静态变量分配内存，并赋予默认值
+            3. 解析：类装载器装入类所引用的其他所有类（静态链接）
+                1. 静态链接：解析阶段，由符号引用转化为直接引用
+                2. 动态链接：程序运行期间，由符号引用转化为直接引用
+        3. 初始化：为类的静态变量赋予正确的初始值，上述准备阶段为静态变量赋予的是虚拟机默认的初始值，此处赋予的才是程序编写者为变量分配的真正初始值，执行静态代码块。
+        4. 使用
+        5. 卸载
+    2. 类加载器的种类，简单分为两类
+        1. 启动类加载器（Bootstrap ClassLoader），负责加载JRE的核心类库，如JRE目录下的rt.jar，charset.jar等.
+        2. 其他类加载器：
+            1. 扩展类加载器（Exetension ClassLoader），负责加载JRE扩展目录ext中的jar类包。
+            2. 系统类加载器（Application ClassLoader），负责加载ClassPath路径下的类包.
+            3. 用户自定义类加载器(User ClassLoader)，负责加载用户自定义路径下的类包
+    3. 什么是双亲委派机制：
+        1. 当我们自定义一个类，交给加载器去加载，本应该先交给系统类加载器，但是加载器会判断自己是否有父加载器，如果有，则交给父加载器，系统类加载器的父加载器是扩展类加载器，再判断是否还有父加载器，扩展类加载的父加载器是启动类加载器，启动类加载器没有父加载器，则再返回到系统类加载器，再返回到系统类加载器，这个过程就叫做双亲委派机制。
+        2. 可以通过自动以类加载器打破双亲委派机制
+    4. 全盘负责委托机制
+        1. 当一个ClassLoader加载一个类的时候，除非显示的使用另一个ClassLoader，该类所依赖和引用的类也由这个ClassLoader载入
+    5. 双亲委派机制的优势
+        1. 沙箱安全机制
+        2. 避免类的重复加载
+    6. 打破双亲委派机制的例子
+        1. Tomcat：同一个tomcat中可能会运行多个应用（war包），不同应用可能会用到同一个类，为了实现隔离，就需要打破双亲委派机制，打破的方法是自定义一个类加载器
+        2. JDBC
+        3. 某些热部署框架
+2. 运行时数据区（内存结构）
+    1. 程序员可修改的部分
+        1. 堆：虚拟机启动时自动分配创建，用于存放对象实例，几乎所有对象都在堆上分配内存，当对象无法在该空间申请到内存时将会抛出OutOfMemoryError异常，同时也是垃圾收集器管理的主要区域。
+        2. 方法区：类的所有字段和方法字节码，以及一些特殊方法如构造函数，接口代码也在这里定义。简单来说，所有定义的方法的信息都保存在该区域，静态变量+常量+类信息（构造方法/接口定义）+运行时常量池都存在方法区中，虽然java虚拟机规范把方法区描述为堆的一个逻辑部分，但它却有一个别名non-heap（非堆）目的是为了跟堆区别开
+    2. 不可修改
+        1. 本地方法栈
+        2. 虚拟机栈
+        3. 程序计数器
+3. JVM调优步骤
+    1. 打印GC日志：-XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDataStamps -Xloggc:./gc.log
+    2. 分析日志得到关键指标
+    3. 分析GC的原因，调优JVM参数
+     
