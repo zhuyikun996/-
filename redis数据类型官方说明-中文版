@@ -1,0 +1,11 @@
+原文链接地址：https://redis.io/topics/data-types-intro
+
+目前Redis支持的数据类型有：
+1. Binary-safe strings
+2. Lists
+3. Sets
+4. Sorted sets
+5. Hashes
+6. Bit arrays (or simply bitmaps)
+7. HyperLogLogs
+8. Streams
